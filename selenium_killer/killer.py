@@ -27,8 +27,23 @@ class _SeleniumKiller:
 
     def __call__(self, *args, **kwargs):
         return self.__class__(*args, **kwargs)
+    
+    def __soup(self, html: Optional[str] = None) -> BeautifulSoup:
+        html = html or self._response.text
+        soup = BeautifulSoup(html, "html.parser")
+        return soup
+    def find(self, *args, html: Optional[str] = None, **kwargs):
+        soup = self.__soup(html)
+        return soup.find(*args, **kwargs)
 
+    def find_all(self, *args, html: Optional[str] = None, **kwargs):
+        soup = self.__soup(html)
+        return soup.find_all(*args, **kwargs)
+    
+    def soup(self, html: Optional[str] = None):
+        return self.__soup(html)
     async def __aenter__(self):
+        print("Iniciando Selenium Killer")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
