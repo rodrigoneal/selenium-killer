@@ -1,8 +1,11 @@
-from pathlib import Path
-
 import pytest
 
 from selenium_killer import SeleniumKiller
+from selenium_killer.capmonster.captcha_breaker import captcha_token
+from capmonstercloudclient.requests import HcaptchaProxylessRequest
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @pytest.fixture
@@ -15,44 +18,37 @@ def test_selenium_killer(killer):
     assert killer
 
 
-def test_selenium_killer_get(killer):
-    assert killer.get(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/emitir"
-    )
+async def test_form_submit():
+    async with SeleniumKiller() as killer:
+        await killer.get("https://www.google.com")
+        killer.forms[0].inputs[5].value = "Brasil"
+        await killer.forms[0].submit(
+            method="GET",
+            follow_redirects=True,
+            input_query_params=[5],
+            input_data=None,
+        )
+        assert (
+            str(killer.response.request.url) == "https://www.google.com/search?q=Brasil"
+        )
 
 
-def test_save_html(killer):
-    killer.get(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp"
-    )
-    killer.save_html("teste")
-    path = Path("teste.html")
-    assert path.exists()
-    path.unlink()
+async def test_se_cria_um_contexto():
+    async with SeleniumKiller() as killer:
+        await killer.get(
+            "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/cnpjreva_Solicitacao.asp"
+        )
+        captcha = await captcha_token(
+            HcaptchaProxylessRequest(
+                websiteKey=killer.forms[0].captcha, websiteUrl=str(killer.response.url)
+            )
+        )
+        token = {"h-captcha-response": captcha}
+        killer.forms[0].inputs[1].value = "53.714.995/0001-19"
+        await killer.forms[0].submit(
+            token=token,
+            follow_redirects=True
+        )
+        await killer.save_html("cnpj")
+    
 
-
-def test_selenium_killer_post(killer):
-    assert killer.post(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/certidaointernet/PJ/emitir"
-    )
-
-
-def test_selenium_killer_extract_captcha(killer):
-    killer.get(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp"
-    )
-    assert killer.extract_captcha()
-
-
-def test_selenium_killer_extract_inputs(killer):
-    killer.get(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp"
-    )
-    assert killer.extract_inputs()
-
-
-def test_selenium_killer_url_base(killer):
-    killer.get(
-        "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp"
-    )
-    assert killer.url_base == "https://solucoes.receita.fazenda.gov.br"
