@@ -1,20 +1,18 @@
-import os
 from capmonstercloudclient import CapMonsterClient, ClientOptions
 
 from capmonstercloudclient.requests.baseRequest import BaseRequest
-from dotenv import load_dotenv
 
-load_dotenv()
+from selenium_killer.log.logger import get_logger
 
-
-API_KEY = os.getenv("API_KEY")
+logger = get_logger()
 
 
-async def captcha_token(request_captcha: BaseRequest) -> str:
-    client_options = ClientOptions(api_key=API_KEY, client_timeout=30)
+async def captcha_token(
+    request_captcha: BaseRequest, api_key: str, client_timeout: int = 30
+) -> dict[str, str]:
+    client_options = ClientOptions(api_key=api_key, client_timeout=client_timeout)
     cap_monster_client = CapMonsterClient(options=client_options)
-    print("Solving captcha...")
-    responses = await cap_monster_client.solve_captcha(request_captcha)
-    print("Captcha solved!")
-
-    return responses["gRecaptchaResponse"]
+    logger.info("Solving captcha...")
+    response = await cap_monster_client.solve_captcha(request_captcha)
+    logger.info("Captcha solved!")
+    return response

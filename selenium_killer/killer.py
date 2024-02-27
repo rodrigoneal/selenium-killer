@@ -6,9 +6,11 @@ import httpx
 import chardet
 
 import requests
+from selenium_killer.log.logger import get_logger
 
 from selenium_killer.util.util import get_base_url, join_url_action
 
+logger = get_logger()
 
 class _SeleniumKiller:
 
@@ -33,20 +35,23 @@ class _SeleniumKiller:
         soup = BeautifulSoup(html, "html.parser")
         return soup
     def find(self, *args, html: Optional[str] = None, **kwargs):
+        logger.info("find element with args: %s, kwargs: %s", args, kwargs)
         soup = self.__soup(html)
         return soup.find(*args, **kwargs)
 
     def find_all(self, *args, html: Optional[str] = None, **kwargs):
+        logger.info("find elements with args: %s, kwargs: %s", args, kwargs)
         soup = self.__soup(html)
         return soup.find_all(*args, **kwargs)
     
     def soup(self, html: Optional[str] = None):
         return self.__soup(html)
     async def __aenter__(self):
-        print("Iniciando Selenium Killer")
+        logger.info("Entering async context")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        logger.info("Exiting async context with exc_type: %s, exc_val: %s, exc_tb: %s", exc_type, exc_val, exc_tb)
         await self.session.aclose()
 
     def _forms_soup(self, html: Optional[str] = None) -> BeautifulSoup:
@@ -60,11 +65,13 @@ class _SeleniumKiller:
 
     @forms.setter
     def forms(self, value: str) -> None:
+        logger.info("Forms: %s", value)
         self._forms = value
 
     async def _requests(
         self, **kwargs
     ) -> requests.Response:
+        logger.info("Making request with kwargs: %s", kwargs)
         return await self.session.request(**kwargs)
 
     async def send_request(
@@ -90,6 +97,8 @@ class _SeleniumKiller:
         use_referer: bool = True,
         **kwargs,
     ) -> requests.Response:
+
+        logger.info("Making get request with url: %s, headers: %s, cookies: %s, params: %s, use_referer: %s, kwargs: %s", url, headers, cookies, params, use_referer, kwargs)
         await self.make_request(
             method="GET",
             url=url,
@@ -105,6 +114,7 @@ class _SeleniumKiller:
     def _prepare_form_to_request(
         self, form: "Form", fields_delete: Optional[list["FormInput"]]
     ) -> None:
+        logger.info("Preparing form to request with form: %s, fields_delete: %s", form, fields_delete)
         data = {"data": {}}
         data["method"] = form.method.upper()
         if form.url_base:
@@ -132,6 +142,21 @@ class _SeleniumKiller:
         exclude_forms: Optional[list["FormInput"]] = None,
         **kwargs,
     ):
+
+        logger.info(
+            "Making post request with url: %s, headers: %s, cookies: %s, data: %s, params: %s, use_referer: %s, inputs: %s, token: %s, form: %s, exclude_forms: %s, kwargs: %s",
+            url,
+            headers,
+            cookies,
+            data,
+            params,
+            use_referer,
+            inputs,
+            token,
+            form,
+            exclude_forms,
+            kwargs,
+        )
         return self.make_request(
             method="POST",
             url=url,
@@ -190,6 +215,7 @@ class _SeleniumKiller:
         return self
 
     def extract_inputs(self, formulario: BeautifulSoup) -> list["FormInput"]:
+        logger.info("Extracting inputs from form: %s", formulario)
         inputs = formulario.find_all(["input", "textarea"])
         _inputs = []
         for input_tag in inputs:
@@ -203,6 +229,7 @@ class _SeleniumKiller:
         return _inputs
 
     def extract_actions(self, formulario: BeautifulSoup) -> list[str]:
+        logger.info("Extracting actions from form: %s", formulario)
         form_action = {"action": None, "id": None, "name": None, "method": None}
         form_action["action"] = formulario.get("action")
         form_action["id"] = formulario.get("id")
@@ -211,6 +238,7 @@ class _SeleniumKiller:
         return form_action
 
     def extract_captcha(self, formulario: BeautifulSoup) -> str:
+        logger.info("Extracting captcha from form: %s", formulario)
         captchas = formulario.find_all(
             class_=lambda value: value and "captcha" in value
         )
@@ -219,6 +247,7 @@ class _SeleniumKiller:
                 return captcha.get("data-sitekey")
 
     def extract_forms(self, html: Optional[str] = None) -> list["Form"]:
+        logger.info("Extracting forms")
         forms = []
         for formulario in self._forms_soup(html):
             _captcha = self.extract_captcha(formulario)
@@ -240,6 +269,7 @@ class _SeleniumKiller:
         if path.endswith(".html"):
             path = path[:-5]
 
+        logger.info("Saving html to: %s", path)
         with open(path + ".html", "wb") as f:
             f.write(self.response.content)
 
@@ -300,6 +330,7 @@ class Form:
         input_query_params: str | list["FormInput"] | list[int] | None = None,
         **kwargs,
     ) -> _SeleniumKiller:
+        logger.info("Submitting form: %s", self)
         if not self.method and not method:
             raise ValueError(
                 "method is required" + "Form: " + str(self) + "Not have method"
@@ -333,7 +364,6 @@ class Form:
             kwargs["data"].update(token)
         
         url = join_url_action(self.url_base, self.action)
-
         await self.__killer.send_request(
             method=self.method, url=url, **kwargs
         )
