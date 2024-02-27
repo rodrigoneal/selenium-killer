@@ -15,6 +15,8 @@ def get_logger(verbose=True):
             logger.add(sink=stderr,
                     format="{time:DD-MM-YYYY at HH:mm:ss} | {name}:{function} | {level} | {message}",
                     level="DEBUG",
-                    backtrace=False,
-                    diagnose=True)
+                    backtrace=True,
+                    diagnose=True,
+                    colorize=True
+                    )
         return logger

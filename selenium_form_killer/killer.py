@@ -12,6 +12,7 @@ from selenium_form_killer.util.util import get_base_url, join_url_action
 
 logger = get_logger()
 
+
 class _SeleniumKiller:
 
     def __init__(self) -> None:
@@ -26,32 +27,35 @@ class _SeleniumKiller:
         )
         self.session = httpx.AsyncClient()
 
-
     def __call__(self, *args, **kwargs):
         return self.__class__(*args, **kwargs)
-    
+
     def __soup(self, html: Optional[str] = None) -> BeautifulSoup:
         html = html or self._response.text
         soup = BeautifulSoup(html, "html.parser")
         return soup
+
     def find(self, *args, html: Optional[str] = None, **kwargs):
-        logger.info("find element with args: %s, kwargs: %s", args, kwargs)
+        logger.info(f"find element with args: {args}, kwargs: {kwargs}")
         soup = self.__soup(html)
         return soup.find(*args, **kwargs)
 
     def find_all(self, *args, html: Optional[str] = None, **kwargs):
-        logger.info("find elements with args: %s, kwargs: %s", args, kwargs)
+        logger.info(f"find elements with args: {args}, kwargs: {kwargs}")
         soup = self.__soup(html)
         return soup.find_all(*args, **kwargs)
-    
+
     def soup(self, html: Optional[str] = None):
         return self.__soup(html)
+
     async def __aenter__(self):
         logger.info("Entering async context")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        logger.info("Exiting async context with exc_type: %s, exc_val: %s, exc_tb: %s", exc_type, exc_val, exc_tb)
+        logger.info(
+            f"Exiting async context with exc_type:{exc_type}, exc_val:{exc_val}, exc_tb:{exc_tb}"
+        )
         await self.session.aclose()
 
     def _forms_soup(self, html: Optional[str] = None) -> BeautifulSoup:
@@ -68,17 +72,17 @@ class _SeleniumKiller:
         logger.info("Forms: %s", value)
         self._forms = value
 
-    async def _requests(
-        self, **kwargs
-    ) -> requests.Response:
-        logger.info("Making request with kwargs: %s", kwargs)
+    async def _requests(self, **kwargs) -> requests.Response:
+        logger.info(
+            f"Making request with kwargs: {kwargs}",
+        )
         return await self.session.request(**kwargs)
 
     async def send_request(
         self, method: Literal["GET", "POST"], url: str, **kwargs
     ) -> requests.Response:
         response = await self._requests(method=method, url=url, **kwargs)
-        encoding = chardet.detect(response.content)['encoding']
+        encoding = chardet.detect(response.content)["encoding"]
         response.encoding = encoding
         self.headers = response.headers
         self.cookies = response.cookies
@@ -98,7 +102,9 @@ class _SeleniumKiller:
         **kwargs,
     ) -> requests.Response:
 
-        logger.info("Making get request with url: %s, headers: %s, cookies: %s, params: %s, use_referer: %s, kwargs: %s", url, headers, cookies, params, use_referer, kwargs)
+        logger.info(
+            f"Making get request with url: {url}, headers:{headers}, cookies:{cookies}, params: {params}, use_referer: {use_referer}, kwargs: {kwargs}"
+        )
         await self.make_request(
             method="GET",
             url=url,
@@ -114,7 +120,9 @@ class _SeleniumKiller:
     def _prepare_form_to_request(
         self, form: "Form", fields_delete: Optional[list["FormInput"]]
     ) -> None:
-        logger.info("Preparing form to request with form: %s, fields_delete: %s", form, fields_delete)
+        logger.info(
+            f"Preparing form to request with form: {form}, fields_delete: {fields_delete}",
+        )
         data = {"data": {}}
         data["method"] = form.method.upper()
         if form.url_base:
@@ -143,20 +151,8 @@ class _SeleniumKiller:
         **kwargs,
     ):
 
-        logger.info(
-            "Making post request with url: %s, headers: %s, cookies: %s, data: %s, params: %s, use_referer: %s, inputs: %s, token: %s, form: %s, exclude_forms: %s, kwargs: %s",
-            url,
-            headers,
-            cookies,
-            data,
-            params,
-            use_referer,
-            inputs,
-            token,
-            form,
-            exclude_forms,
-            kwargs,
-        )
+        logger.info(f"Making post request with url: {url} e kwargs: {kwargs}")
+
         return self.make_request(
             method="POST",
             url=url,
@@ -188,6 +184,7 @@ class _SeleniumKiller:
         **httpx_options: dict[str, str],
     ) -> requests.Response:
         if use_referer and self.response:
+            logger.info(f"Using referer:{str(self.response.url)}")
             self.response.headers["Referer"] = str(self.response.url)
         if inputs:
             if not isinstance(inputs, list):
@@ -215,7 +212,7 @@ class _SeleniumKiller:
         return self
 
     def extract_inputs(self, formulario: BeautifulSoup) -> list["FormInput"]:
-        logger.info("Extracting inputs from form: %s", formulario)
+        logger.info(f"Extracting inputs from form: {formulario}")
         inputs = formulario.find_all(["input", "textarea"])
         _inputs = []
         for input_tag in inputs:
@@ -229,7 +226,7 @@ class _SeleniumKiller:
         return _inputs
 
     def extract_actions(self, formulario: BeautifulSoup) -> list[str]:
-        logger.info("Extracting actions from form: %s", formulario)
+        logger.info(f"Extracting actions from form:{formulario}")
         form_action = {"action": None, "id": None, "name": None, "method": None}
         form_action["action"] = formulario.get("action")
         form_action["id"] = formulario.get("id")
@@ -238,7 +235,7 @@ class _SeleniumKiller:
         return form_action
 
     def extract_captcha(self, formulario: BeautifulSoup) -> str:
-        logger.info("Extracting captcha from form: %s", formulario)
+        logger.info(f"Extracting captcha from form: {formulario}")
         captchas = formulario.find_all(
             class_=lambda value: value and "captcha" in value
         )
@@ -255,7 +252,7 @@ class _SeleniumKiller:
             _inputs = self.extract_inputs(formulario)
             forms.append(
                 Form(
-                    killer = self,
+                    killer=self,
                     inputs=_inputs,
                     captcha=_captcha,
                     button=None,
@@ -265,16 +262,26 @@ class _SeleniumKiller:
             )
         return forms
 
-    def _save_html(self, path: str) -> None:
-        if path.endswith(".html"):
-            path = path[:-5]
+    def _save_html(self, name: str) -> None:
+        if name.endswith(".html"):
+            path = name[:-5]
+        else:
+            path = name
 
-        logger.info("Saving html to: %s", path)
+        logger.info(f"Saving html to: {path}")
         with open(path + ".html", "wb") as f:
             f.write(self.response.content)
 
-    async def save_html(self, path: str) -> None:
-        await asyncio.to_thread(self._save_html, path)
+    async def save_html(self, name: str) -> None:
+        await asyncio.to_thread(self._save_html, name)
+
+    def _save_file(self, path: str) -> None:
+        logger.info(f"Saving file to: {path}")
+        with open(path, "wb") as f:
+            f.write(self.response.content)
+
+    async def save_file(self, path: str) -> None:
+        await asyncio.to_thread(self._save_file, path)
 
     @property
     def response(self) -> httpx.Response:
@@ -290,7 +297,6 @@ class _SeleniumKiller:
                 f"<SeleniumKiller: url={str(self.response.url)} status={self.response} >"
             )
         return str("<SeleniumKiller: None>")
-
 
 
 SeleniumKiller: _SeleniumKiller = _SeleniumKiller()
@@ -330,7 +336,7 @@ class Form:
         input_query_params: str | list["FormInput"] | list[int] | None = None,
         **kwargs,
     ) -> _SeleniumKiller:
-        logger.info("Submitting form: %s", self)
+        logger.info(f"Submitting form: {self}")
         if not self.method and not method:
             raise ValueError(
                 "method is required" + "Form: " + str(self) + "Not have method"
@@ -347,8 +353,8 @@ class Form:
                 params = {input.name: input.value for input in inputs}
                 kwargs["params"] = params
             elif isinstance(input_data[0], FormInput):
-                 kwargs["params"] = {input.name: input.value for input in self.inputs}
-        
+                kwargs["params"] = {input.name: input.value for input in self.inputs}
+
         if input_data == "all":
             pass
         elif isinstance(input_data, list):
@@ -362,11 +368,9 @@ class Form:
 
         if token:
             kwargs["data"].update(token)
-        
+
         url = join_url_action(self.url_base, self.action)
-        await self.__killer.send_request(
-            method=self.method, url=url, **kwargs
-        )
+        await self.__killer.send_request(method=self.method, url=url, **kwargs)
         return self.__killer
 
 
@@ -381,4 +385,3 @@ class FormInput:
 
     def to_dict(self) -> dict:
         return {self.name: self.value}
-
