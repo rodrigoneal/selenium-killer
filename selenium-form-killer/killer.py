@@ -6,9 +6,9 @@ import httpx
 import chardet
 
 import requests
-from selenium_killer.log.logger import get_logger
+from selenium_form_killer.log.logger import get_logger
 
-from selenium_killer.util.util import get_base_url, join_url_action
+from selenium_form_killer.util.util import get_base_url, join_url_action
 
 logger = get_logger()
 

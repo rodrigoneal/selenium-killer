@@ -2,7 +2,7 @@ from capmonstercloudclient import CapMonsterClient, ClientOptions
 
 from capmonstercloudclient.requests.baseRequest import BaseRequest
 
-from selenium_killer.log.logger import get_logger
+from selenium_form_killer.log.logger import get_logger
 
 logger = get_logger()
 
