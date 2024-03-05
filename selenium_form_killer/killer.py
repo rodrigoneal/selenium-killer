@@ -288,9 +288,6 @@ class _SeleniumKiller:
         return str("<SeleniumKiller: None>")
 
 
-SeleniumKiller: _SeleniumKiller = _SeleniumKiller()
-
-
 class Form:
     def __init__(
         self,
