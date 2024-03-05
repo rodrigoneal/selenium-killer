@@ -1,9 +1,18 @@
 import asyncio
 import httpx
 
+
 class AntiCaptcha:
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        self.__api_key = api_key
+
+    @property
+    def api_key(self):
+        raise NotImplementedError("Tá loucão?")
+
+    @api_key.setter
+    def api_key(self, api_key):
+        self.__api_key = api_key
 
     async def create_task(
         self,
@@ -50,7 +59,7 @@ class AntiCaptcha:
         }
 
         json_data = {
-            "clientKey": self.api_key,
+            "clientKey": self.__api_key,
             "taskId": task_id,
         }
         return await client.post(
@@ -86,9 +95,20 @@ class AntiCaptcha:
             for _ in range(time_to_wait):
                 result = await self.task_result(client=client, task_id=result_task)
                 if result.json()["status"] == "ready":
-                    return result.json()['solution']["text"]
-                else: 
+                    return result.json()["solution"]["text"]
+                else:
                     asyncio.sleep(0.5)
             raise TimeoutError("O captcha demorou mais tempo que o esperado.")
-            
 
+    async def get_balance(self) -> float:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.anti-captcha.com/getBalance",
+                json={"clientKey": self.__api_key},
+            )
+            try:
+                return float(response.json()["balance"])
+            except KeyError:
+                KeyError(
+                    "O AntiCaptcha retornou um valor inválido ou a API KEY esta errada."
+                )
