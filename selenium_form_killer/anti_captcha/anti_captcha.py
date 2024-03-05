@@ -32,7 +32,7 @@ class AntiCaptcha:
         }
 
         json_data = {
-            "clientKey": self.api_key,
+            "clientKey": self.__api_key,
             "task": {
                 "type": "ImageToTextTask",
                 "body": img_base_64,
