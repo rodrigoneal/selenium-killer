@@ -97,7 +97,7 @@ class AntiCaptcha:
                 if result.json()["status"] == "ready":
                     return result.json()["solution"]["text"]
                 else:
-                    asyncio.sleep(0.5)
+                    await asyncio.sleep(0.5)
             raise TimeoutError("O captcha demorou mais tempo que o esperado.")
 
     async def get_balance(self) -> float:
