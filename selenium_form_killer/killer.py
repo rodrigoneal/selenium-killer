@@ -333,6 +333,7 @@ class Form:
 
     async def submit(
         self,
+        url: Optional[str] = None,        
         token: Optional[dict[str, str]] = {},
         method: str = None,
         input_data: str | list["FormInput"] | list[int] | None = "all",
@@ -346,7 +347,6 @@ class Form:
             )
         elif method:
             self.method = method
-
         if input_query_params == "all":
             params = {input.name: input.value for input in self.inputs}
             kwargs["params"] = params
@@ -371,8 +371,9 @@ class Form:
 
         if token:
             kwargs["data"].update(token)
-
-        url = join_url_action(self.url_base, self.action)
+        
+        if not url:
+            url = join_url_action(self.url_base, self.action)
         await self.__killer.send_request(method=self.method, url=url, **kwargs)
         return self.__killer
 
