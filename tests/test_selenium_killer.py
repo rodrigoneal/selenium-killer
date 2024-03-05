@@ -8,8 +8,6 @@ from capmonstercloudclient.requests import HcaptchaProxylessRequest
 from dotenv import load_dotenv
 
 
-
-
 load_dotenv()
 
 
