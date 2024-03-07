@@ -11,7 +11,7 @@ from selenium_form_killer.log.logger import get_logger
 from selenium_form_killer.util.util import get_base_url, join_url_action
 
 
-class _SeleniumKiller:
+class SeleniumKiller:
     def __init__(self, headers: dict[str, str] = {}, verbose: bool = False) -> None:
         self.url_base: str = None
         self.headers: Annotated[Optional[str], Doc("Cabecalhos da requisição")] = None
@@ -44,7 +44,8 @@ class _SeleniumKiller:
         return soup.find_all(*args, **kwargs)
 
     def soup(self, html: Optional[str] = None):
-        return self.__soup(html)
+        html_text = html or self._response.text
+        return self.__soup(html_text)
 
     async def __aenter__(self):
         self.logger.info("Entering async context")
@@ -55,6 +56,7 @@ class _SeleniumKiller:
             f"Exiting async context with exc_type:{exc_type}, exc_val:{exc_val}, exc_tb:{exc_tb}"
         )
         await self.session.aclose()
+        self.logger.info("Session closed")
 
     def _forms_soup(self, html: Optional[str] = None) -> BeautifulSoup:
         html = html or self._response.text
@@ -67,7 +69,7 @@ class _SeleniumKiller:
 
     @forms.setter
     def forms(self, value: str) -> None:
-        self.logger.info("Forms: %s", value)
+        self.logger.info(f"Forms: {value}")
         self._forms = value
 
     async def _requests(self, **kwargs) -> requests.Response:
@@ -260,9 +262,10 @@ class _SeleniumKiller:
 
 
     async def save_html(self, name: str) -> None:
+        path = name
         if not name.endswith(".html"):
-            path = name+".html"
-        await self._save_file(path)
+            path = name+".html"        
+        await asyncio.to_thread(self._save_file, path)
 
     def _save_file(self, path: str) -> None:
         self.logger.info(f"Saving file to: {path}")
@@ -291,7 +294,7 @@ class _SeleniumKiller:
 class Form:
     def __init__(
         self,
-        killer: _SeleniumKiller,
+        killer: SeleniumKiller,
         inputs: list["FormInput"],
         action: str,
         method: str,
@@ -336,7 +339,7 @@ class Form:
         input_data: str | list["FormInput"] | list[int] | None = "all",
         input_query_params: str | list["FormInput"] | list[int] | None = None,
         **kwargs,
-    ) -> _SeleniumKiller:
+    ) -> SeleniumKiller:
         self.__killer.logger.info(f"Submitting form: {self}")
         if not self.method and not method:
             raise ValueError(
