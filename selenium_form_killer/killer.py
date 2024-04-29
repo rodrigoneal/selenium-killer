@@ -22,7 +22,9 @@ class SeleniumKiller:
         self.status_code: Annotated[
             Optional[int], Doc("Status code da requisição")
         ] = None
-        self.session = httpx.AsyncClient(headers=headers)
+        self.session = httpx.AsyncClient(
+            headers=headers,
+        )
         self.logger = get_logger(verbose)
 
     def __call__(self, *args, **kwargs):
@@ -52,9 +54,12 @@ class SeleniumKiller:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.logger.info(
-            f"Exiting async context with exc_type:{exc_type}, exc_val:{exc_val}, exc_tb:{exc_tb}"
-        )
+        if not exc_type:
+            self.logger.info("Exiting async context")
+        else:
+            self.logger.critical(
+                f"Exiting async context with exc_type:{exc_type}, exc_val:{exc_val}, exc_tb:{exc_tb}"
+            )
         await self.session.aclose()
         self.logger.info("Session closed")
 
@@ -210,7 +215,6 @@ class SeleniumKiller:
         return self
 
     def extract_inputs(self, formulario: BeautifulSoup) -> list["FormInput"]:
-        self.logger.info(f"Extracting inputs from form: {formulario}")
         inputs = formulario.find_all(["input", "textarea"])
         _inputs = []
         for input_tag in inputs:
@@ -220,26 +224,30 @@ class SeleniumKiller:
                 _type = input_tag.get("type")
             else:
                 _type = "text"
-            _inputs.append(FormInput(name=nome, value=valor, type=_type))
+            form_input = FormInput(name=nome, value=valor, type=_type)
+            self.logger.info(f"Extracting inputs: {form_input}")
+            _inputs.append(form_input)
         return _inputs
 
     def extract_actions(self, formulario: BeautifulSoup) -> list[str]:
-        self.logger.info(f"Extracting actions from form:{formulario}")
         form_action = {"action": None, "id": None, "name": None, "method": None}
         form_action["action"] = formulario.get("action")
         form_action["id"] = formulario.get("id")
         form_action["name"] = formulario.get("name")
         form_action["method"] = formulario.get("method")
+        self.logger.info(f"Extracting actions from form:{form_action}")
         return form_action
 
     def extract_captcha(self, formulario: BeautifulSoup) -> str:
-        self.logger.info(f"Extracting captcha from form: {formulario}")
         captchas = formulario.find_all(
             class_=lambda value: value and "captcha" in value
         )
         for captcha in captchas:
-            if captcha.get("data-sitekey"):
-                return captcha.get("data-sitekey")
+            if data_site :=captcha.get("data-sitekey"):
+                self.logger.info(f"Extracting captcha from form: {captcha} data-sitekey: {data_site}")
+                return data_site
+            else:
+                self.logger.error(f"Extracting captcha from form: {captcha} not found data-sitekey")
 
     def extract_forms(self, html: Optional[str] = None) -> list["Form"]:
         self.logger.info("Extracting forms")
@@ -260,11 +268,10 @@ class SeleniumKiller:
             )
         return forms
 
-
     async def save_html(self, name: str) -> None:
         path = name
         if not name.endswith(".html"):
-            path = name+".html"        
+            path = name + ".html"
         await asyncio.to_thread(self._save_file, path)
 
     def _save_file(self, path: str) -> None:
@@ -314,7 +321,19 @@ class Form:
         self.url_base = url_base
         self.__killer = killer
 
+    def pretty_print(self) -> None:
+        for index, input in enumerate(self.inputs):
+            print(f"{index}: {input}")
+
     def __repr__(self) -> str:
+        if self.inputs:
+            if len(self.inputs) > 9:
+                 str_inputs = ", ".join([str(index) + ": " + str(input) for index, input in enumerate(self.inputs[:9])])
+                 str_inputs += ", ..."
+                 return str(f"<Form: {self.id=}, {str_inputs=}>")
+            else:
+                str_inputs = ", ".join([str(index) + ": " + str(input) for index, input in enumerate(self.inputs)])
+                return str(f"<Form: {self.id=}, {str_inputs=}>")
         return str(f"<Form: {self.id=}>")
 
     def add_input(self, name: str, value: str, type: str = "text") -> None:
@@ -322,18 +341,19 @@ class Form:
 
     def delete_input(self, name: str) -> None:
         self.inputs = [input for input in self.inputs if input.name != name]
-    
+
     def total_inputs(self) -> int:
         return len(self.inputs)
-    
+
     def get_input(self, name: str) -> "FormInput":
         for input in self.inputs:
             if input.name == name:
                 return input
 
+
     async def submit(
         self,
-        url: Optional[str] = None,        
+        url: Optional[str] = None,
         token: Optional[dict[str, str]] = {},
         method: str = None,
         input_data: str | list["FormInput"] | list[int] | None = "all",
@@ -371,7 +391,7 @@ class Form:
 
         if token:
             kwargs["data"].update(token)
-        
+
         if not url:
             url = join_url_action(self.url_base, self.action)
         await self.__killer.send_request(method=self.method, url=url, **kwargs)
@@ -389,5 +409,4 @@ class FormInput:
 
     def to_dict(self) -> dict:
         return {self.name: self.value}
-    
 

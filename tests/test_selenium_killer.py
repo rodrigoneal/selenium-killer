@@ -35,7 +35,7 @@ async def test_form_submit():
             str(killer.response.request.url) == "https://www.google.com/search?q=Brasil"
         )
 
-
+@pytest.mark.skipif(os.getenv("API_KEY") is None, reason="API_KEY not found")
 async def test_se_cria_um_contexto():
     token = os.getenv("API_KEY")
     cnpj = os.getenv("CNPJ")
