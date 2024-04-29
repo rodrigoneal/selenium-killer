@@ -1,5 +1,6 @@
 import asyncio
 from typing import Annotated, Literal, Optional
+from urllib.parse import urlencode
 from typing_extensions import Doc
 from bs4 import BeautifulSoup
 import httpx
@@ -14,7 +15,9 @@ from selenium_form_killer.util.util import get_base_url, join_url_action
 class SeleniumKiller:
     def __init__(self, headers: dict[str, str] = {}, verbose: bool = False) -> None:
         self.url_base: str = None
-        self.headers: Annotated[Optional[str], Doc("Cabecalhos da requisição")] = None
+        self.headers: Annotated[
+            Optional[dict[str, str]], Doc("Cabecalhos da requisição")
+        ] = headers or {}
         self.data: Annotated[Optional[str], Doc("Dados da requisição")] = None
         self.cookies: Annotated[Optional[str], Doc("Cookies da requisição")] = None
         self._response = None
@@ -26,6 +29,20 @@ class SeleniumKiller:
             headers=headers,
         )
         self.logger = get_logger(verbose)
+
+    @classmethod
+    def from_auth_data(
+        cls, url: str, payload: dict, key_token: Optional[str] = None
+    ) -> "SeleniumKiller":
+        payload_data = urlencode(payload)
+        key_token = key_token if key_token else "access_token"
+        with httpx.Client() as client:
+            response = client.post(url, data=payload_data)
+
+            if response.status_code == 200:
+                token = response.json()["access_token"]
+                headers = {"Authorization": f"Bearer {token}"}
+            return cls(headers=headers, verbose=True)
 
     def __call__(self, *args, **kwargs):
         return self.__class__(*args, **kwargs)
@@ -243,11 +260,15 @@ class SeleniumKiller:
             class_=lambda value: value and "captcha" in value
         )
         for captcha in captchas:
-            if data_site :=captcha.get("data-sitekey"):
-                self.logger.info(f"Extracting captcha from form: {captcha} data-sitekey: {data_site}")
+            if data_site := captcha.get("data-sitekey"):
+                self.logger.info(
+                    f"Extracting captcha from form: {captcha} data-sitekey: {data_site}"
+                )
                 return data_site
             else:
-                self.logger.error(f"Extracting captcha from form: {captcha} not found data-sitekey")
+                self.logger.error(
+                    f"Extracting captcha from form: {captcha} not found data-sitekey"
+                )
 
     def extract_forms(self, html: Optional[str] = None) -> list["Form"]:
         self.logger.info("Extracting forms")
@@ -328,11 +349,21 @@ class Form:
     def __repr__(self) -> str:
         if self.inputs:
             if len(self.inputs) > 9:
-                 str_inputs = ", ".join([str(index) + ": " + str(input) for index, input in enumerate(self.inputs[:9])])
-                 str_inputs += ", ..."
-                 return str(f"<Form: {self.id=}, {str_inputs=}>")
+                str_inputs = ", ".join(
+                    [
+                        str(index) + ": " + str(input)
+                        for index, input in enumerate(self.inputs[:9])
+                    ]
+                )
+                str_inputs += ", ..."
+                return str(f"<Form: {self.id=}, {str_inputs=}>")
             else:
-                str_inputs = ", ".join([str(index) + ": " + str(input) for index, input in enumerate(self.inputs)])
+                str_inputs = ", ".join(
+                    [
+                        str(index) + ": " + str(input)
+                        for index, input in enumerate(self.inputs)
+                    ]
+                )
                 return str(f"<Form: {self.id=}, {str_inputs=}>")
         return str(f"<Form: {self.id=}>")
 
@@ -349,7 +380,6 @@ class Form:
         for input in self.inputs:
             if input.name == name:
                 return input
-
 
     async def submit(
         self,
@@ -409,4 +439,3 @@ class FormInput:
 
     def to_dict(self) -> dict:
         return {self.name: self.value}
-
