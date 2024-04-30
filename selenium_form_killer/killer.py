@@ -1,34 +1,27 @@
 import asyncio
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Mapping, Optional, Sequence
 from urllib.parse import urlencode
 
 import chardet
 import httpx
 import requests
 from bs4 import BeautifulSoup
-from typing_extensions import Doc
+from typing_extensions import override
 
+from selenium_form_killer.forms import Form, FormInput
 from selenium_form_killer.log.logger import get_logger
+from selenium_form_killer.types.generic_types import ActionTypes
+from selenium_form_killer.types.selenium_types import (
+    FormABC,
+    FormInputABC,
+    SeleniumKillerABC,
+)
 from selenium_form_killer.util.util import get_base_url, join_url_action
 
 
-class SeleniumKiller:
+class SeleniumKiller(SeleniumKillerABC):
     def __init__(self, headers: dict[str, str] = {}, verbose: bool = False) -> None:
-        self.url_base: str = None
-        self.headers: Annotated[
-            Optional[dict[str, str]], Doc("Cabecalhos da requisição")
-        ] = headers or {}
-        self.data: Annotated[Optional[str], Doc("Dados da requisição")] = None
-        self.cookies: Annotated[Optional[str], Doc("Cookies da requisição")] = None
-        self._response = None
-        self._forms: list[Form] = None
-        self.status_code: Annotated[
-            Optional[int], Doc("Status code da requisição")
-        ] = None
-        self.session = httpx.AsyncClient(
-            headers=headers,
-        )
-        self.logger = get_logger(verbose)
+        super().__init__(headers=headers, verbose=verbose)
 
     @classmethod
     def from_auth_data(
@@ -64,12 +57,14 @@ class SeleniumKiller:
         soup = BeautifulSoup(html, "html.parser")
         return soup
 
-    def find(self, *args, html: Optional[str] = None, **kwargs):
+    def find(self, *args, html: Optional[str] = None, **kwargs) -> BeautifulSoup:
         self.logger.info(f"find element with args: {args}, kwargs: {kwargs}")
         soup = self.__soup(html)
         return soup.find(*args, **kwargs)
 
-    def find_all(self, *args, html: Optional[str] = None, **kwargs):
+    def find_all(
+        self, *args, html: Optional[str] = None, **kwargs
+    ) -> list[BeautifulSoup]:
         self.logger.info(f"find elements with args: {args}, kwargs: {kwargs}")
         soup = self.__soup(html)
         return soup.find_all(*args, **kwargs)
@@ -91,11 +86,6 @@ class SeleniumKiller:
             )
         await self.session.aclose()
         self.logger.info("Session closed")
-
-    def _forms_soup(self, html: Optional[str] = None) -> BeautifulSoup:
-        html = html or self._response.text
-        soup = BeautifulSoup(html, "html.parser")
-        return soup.find_all("form")
 
     @property
     def forms(self) -> list["Form"]:
@@ -156,6 +146,7 @@ class SeleniumKiller:
         self.logger.info(
             f"Preparing form to request with form: {form}, fields_delete: {fields_delete}",
         )
+        breakpoint()
         data = {"data": {}}
         data["method"] = form.method.upper()
         if form.url_base:
@@ -169,7 +160,7 @@ class SeleniumKiller:
             data["data"][input_form.name] = input_form.value
         return data
 
-    def post(
+    async def post(
         self,
         url: Optional[str] = None,
         headers: Optional[dict[str, str]] = {},
@@ -179,13 +170,13 @@ class SeleniumKiller:
         use_referer: bool = True,
         inputs: Optional[list["FormInput"] | dict[str, str]] = None,
         token: Optional[dict] = {},
-        form: Optional["Form"] = False,
+        form: Optional["Form"] = None,
         exclude_forms: Optional[list["FormInput"]] = None,
         **kwargs,
     ):
         self.logger.info(f"Making post request with url: {url} e kwargs: {kwargs}")
 
-        return self.make_request(
+        return await self.make_request(
             method="POST",
             url=url,
             headers=headers,
@@ -243,7 +234,7 @@ class SeleniumKiller:
         )
         return self
 
-    def extract_inputs(self, formulario: BeautifulSoup) -> list["FormInput"]:
+    def extract_inputs(self, formulario: BeautifulSoup) -> list[FormInputABC]:
         inputs = formulario.find_all(["input", "textarea"])
         _inputs = []
         for input_tag in inputs:
@@ -258,8 +249,13 @@ class SeleniumKiller:
             _inputs.append(form_input)
         return _inputs
 
-    def extract_actions(self, formulario: BeautifulSoup) -> list[str]:
-        form_action = {"action": None, "id": None, "name": None, "method": None}
+    def extract_actions(self, formulario: BeautifulSoup) -> ActionTypes:
+        form_action: ActionTypes = {
+            "action": None,
+            "id": None,
+            "name": None,
+            "method": None,
+        }
         form_action["action"] = formulario.get("action")
         form_action["id"] = formulario.get("id")
         form_action["name"] = formulario.get("name")
@@ -267,7 +263,7 @@ class SeleniumKiller:
         self.logger.info(f"Extracting actions from form:{form_action}")
         return form_action
 
-    def extract_captcha(self, formulario: BeautifulSoup) -> str:
+    def extract_captcha(self, formulario: BeautifulSoup) -> str | None:
         captchas = formulario.find_all(
             class_=lambda value: value and "captcha" in value
         )
@@ -281,14 +277,17 @@ class SeleniumKiller:
                 self.logger.error(
                     f"Extracting captcha from form: {captcha} not found data-sitekey"
                 )
+        return None
 
-    def extract_forms(self, html: Optional[str] = None) -> list["Form"]:
+    @override
+    def extract_forms(self, html: Optional[str] = None) -> Sequence["Form"]:
         self.logger.info("Extracting forms")
         forms = []
-        for formulario in self._forms_soup(html):
+        for formulario in self.find_all("form", html=html):
             _captcha = self.extract_captcha(formulario)
             extract_actions = self.extract_actions(formulario)
             _inputs = self.extract_inputs(formulario)
+
             forms.append(
                 Form(
                     killer=self,
@@ -329,129 +328,3 @@ class SeleniumKiller:
                 f"<SeleniumKiller: url={str(self.response.url)} status={self.response} >"
             )
         return str("<SeleniumKiller: None>")
-
-
-class Form:
-    def __init__(
-        self,
-        killer: SeleniumKiller,
-        inputs: list["FormInput"],
-        action: str,
-        method: str,
-        id: Optional[str] = None,
-        name: Optional[str] = None,
-        captcha: Optional[str] = None,
-        button: Optional[dict[str, str]] = None,
-        url_base: Optional[str] = None,
-    ) -> None:
-        self.inputs = inputs
-        self.action = action
-        self.method = method
-        self.id = id
-        self.name = name
-        self.button = button
-        self.captcha = captcha
-        self.url_base = url_base
-        self.__killer = killer
-
-    def pretty_print(self) -> None:
-        for index, input in enumerate(self.inputs):
-            print(f"{index}: {input}")
-
-    def __repr__(self) -> str:
-        if self.inputs:
-            if len(self.inputs) > 9:
-                str_inputs = ", ".join(
-                    [
-                        str(index) + ": " + str(input)
-                        for index, input in enumerate(self.inputs[:9])
-                    ]
-                )
-                str_inputs += ", ..."
-                return str(f"<Form: {self.id=}, {str_inputs=}>")
-            else:
-                str_inputs = ", ".join(
-                    [
-                        str(index) + ": " + str(input)
-                        for index, input in enumerate(self.inputs)
-                    ]
-                )
-                return str(f"<Form: {self.id=}, {str_inputs=}>")
-        return str(f"<Form: {self.id=}>")
-
-    def add_input(self, name: str, value: str, type: str = "text") -> None:
-        self.inputs.append(FormInput(name=name, value=value, type=type))
-
-    def delete_input(self, name: str) -> None:
-        self.inputs = [input for input in self.inputs if input.name != name]
-
-    def total_inputs(self) -> int:
-        return len(self.inputs)
-
-    def get_input(self, name: str) -> "FormInput":
-        for input in self.inputs:
-            if input.name == name:
-                return input
-
-    def get_inputs_by_index(self, index: list[int]) -> list["FormInput"]:
-        return [self.inputs[indice] for indice in index]
-
-    async def submit(
-        self,
-        url: Optional[str] = None,
-        token: Optional[dict[str, str]] = {},
-        method: str = None,
-        input_data: str | list["FormInput"] | list[int] | None = "all",
-        input_query_params: str | list["FormInput"] | list[int] | None = None,
-        **kwargs,
-    ) -> SeleniumKiller:
-        self.__killer.logger.info(f"Submitting form: {self}")
-        if not self.method and not method:
-            raise ValueError(
-                "method is required" + "Form: " + str(self) + "Not have method"
-            )
-        elif method:
-            self.method = method
-        if input_query_params == "all":
-            params = {}
-            params.update({input.to_dict() for input in self.inputs})
-            kwargs["params"] = params
-        elif isinstance(input_query_params, list):
-            if isinstance(input_query_params[0], int):
-                inputs = self.get_inputs_by_index(input_query_params)
-                params = {input.name: input.value for input in inputs}
-                kwargs["params"] = params
-            elif isinstance(input_data[0], FormInput):
-                kwargs["params"] = {input.name: input.value for input in self.inputs}
-
-        if input_data == "all":
-            pass
-        elif isinstance(input_data, list):
-            if isinstance(input_data[0], int):
-                self.inputs = [self.inputs[indice] for indice in input_data]
-            elif isinstance(input_data[0], FormInput):
-                self.inputs = input_data
-        elif not input_data:
-            self.inputs = []
-        kwargs["data"] = {input.name: input.value for input in self.inputs}
-
-        if token:
-            kwargs["data"].update(token)
-
-        if not url:
-            url = join_url_action(self.url_base, self.action)
-        await self.__killer.send_request(method=self.method, url=url, **kwargs)
-        return self.__killer
-
-
-class FormInput:
-    def __init__(self, name: str, value: str, type: str = "text") -> None:
-        self.type = type
-        self.name = name
-        self.value = value
-
-    def __repr__(self) -> str:
-        return str(f"<FormInput: name:{self.name} type:{self.type} value:{self.value}>")
-
-    def to_dict(self) -> dict:
-        return {self.name: self.value}

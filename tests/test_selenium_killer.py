@@ -6,18 +6,33 @@ from selenium_form_killer import SeleniumKiller
 
 @pytest.fixture
 def html():
-    return """ 
-    <html lang="pt-br">
+    return """
+    <html>
     <head>
-        <meta charset="UTF-8">
-        <title>Test Soup</title>
     </head>
     <body>
+        <h1>Teste selenium killer</h1>
         <ul>
             <li>Item 1</li>
             <li>Item 2</li>
         </ul>
+        <form action="http://www.google.com/search" method="get">
+            <input type="text" name="q" />
+            <input type="text" class="captcha" data-sitekey="123456789" />
+            <input type="submit" />
+        </form>
     </body>
+    """
+
+
+@pytest.fixture
+def html_google():
+    return """
+    <html><head><title>Pesquisa - Google</title></head>
+    <body><div id="res"><center><h3>Pesquisa Google</h3>
+    <b>Pesquisa relacionada</b><br>
+    <a href="https://www.google.com.br/search?q=selenium+killer" target="_blank">Selenium Killer</a>
+    </center></div></body></html>
     """
 
 
@@ -75,3 +90,44 @@ def test_find(killer, html):
 
 def test_find_all(killer, html):
     return len(killer.find_all("li", html=html)) == 2
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_se_faz_get(killer, respx_mock, html):
+    respx_mock.get("/zoo").mock(return_value=httpx.Response(200, html=html))
+    await killer.get("https://foo.bar/zoo")
+    assert killer.response.status_code == 200
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_se_faz_post(killer, respx_mock, html):
+    respx_mock.post("/zoo").mock(return_value=httpx.Response(200, html=html))
+    await killer.post("https://foo.bar/zoo")
+    assert killer.response.status_code == 200
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_se_pega_o_form(killer, respx_mock, html):
+    respx_mock.get("/zoo").mock(return_value=httpx.Response(200, html=html))
+    await killer.get("https://foo.bar/zoo")
+    assert len(killer.forms) == 1
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_se_pega_o_form_input_e_captcha(killer, respx_mock, html):
+    respx_mock.get("/zoo").mock(return_value=httpx.Response(200, html=html))
+    await killer.get("https://foo.bar/zoo")
+    assert killer.forms[0].captcha
+    assert killer.forms[0].inputs[0]
+
+
+async def test_se_pega_o_form_faz_submit(killer, respx_mock, html, html_google):
+    respx_mock.get("https://foo.bar/zoo").mock(
+        return_value=httpx.Response(200, html=html)
+    )
+    await killer.get("https://foo.bar/zoo")
+    respx_mock.get("http://www.google.com/search").mock(
+        return_value=httpx.Response(200, html=html_google)
+    )
+    await killer.forms[0].submit()
+    assert "Selenium Killer" in killer.response.text
