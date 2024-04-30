@@ -1,1 +1,0 @@
-from .anti_captcha import AntiCaptcha

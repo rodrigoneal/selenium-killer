@@ -1,14 +1,14 @@
 import asyncio
 from typing import Annotated, Literal, Optional
 from urllib.parse import urlencode
-from typing_extensions import Doc
-from bs4 import BeautifulSoup
-import httpx
+
 import chardet
-
+import httpx
 import requests
-from selenium_form_killer.log.logger import get_logger
+from bs4 import BeautifulSoup
+from typing_extensions import Doc
 
+from selenium_form_killer.log.logger import get_logger
 from selenium_form_killer.util.util import get_base_url, join_url_action
 
 
@@ -34,14 +34,26 @@ class SeleniumKiller:
     def from_auth_data(
         cls, url: str, payload: dict, key_token: Optional[str] = None
     ) -> "SeleniumKiller":
+        """
+        Makes a post request to the given url with the payload
+        and returns a new instance of SeleniumKiller with
+        the Authorization header set.
+
+        If the key_token is not provided, it defaults to "access_token".
+
+        :param url: endpoint url
+        :param payload: data to be sent
+        :param key_token: key in the response json that contains the access_token
+        """
         payload_data = urlencode(payload)
         key_token = key_token if key_token else "access_token"
         with httpx.Client() as client:
             response = client.post(url, data=payload_data)
-
-            if response.status_code == 200:
-                token = response.json()["access_token"]
-                headers = {"Authorization": f"Bearer {token}"}
+            response.raise_for_status()
+            # Extract the token from the response
+            token = response.json()[key_token]
+            # Set the authorization header
+            headers = {"Authorization": f"Bearer {token}"}
             return cls(headers=headers, verbose=True)
 
     def __call__(self, *args, **kwargs):
@@ -381,6 +393,9 @@ class Form:
             if input.name == name:
                 return input
 
+    def get_inputs_by_index(self, index: list[int]) -> list["FormInput"]:
+        return [self.inputs[indice] for indice in index]
+
     async def submit(
         self,
         url: Optional[str] = None,
@@ -398,11 +413,12 @@ class Form:
         elif method:
             self.method = method
         if input_query_params == "all":
-            params = {input.name: input.value for input in self.inputs}
+            params = {}
+            params.update({input.to_dict() for input in self.inputs})
             kwargs["params"] = params
         elif isinstance(input_query_params, list):
             if isinstance(input_query_params[0], int):
-                inputs = [self.inputs[indice] for indice in input_query_params]
+                inputs = self.get_inputs_by_index(input_query_params)
                 params = {input.name: input.value for input in inputs}
                 kwargs["params"] = params
             elif isinstance(input_data[0], FormInput):

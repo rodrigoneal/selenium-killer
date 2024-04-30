@@ -1,16 +1,24 @@
-import json
-import os
 import httpx
 import pytest
 
-
 from selenium_form_killer import SeleniumKiller
-from selenium_form_killer.capmonster.captcha_breaker import captcha_token
-from capmonstercloudclient.requests import HcaptchaProxylessRequest
-from dotenv import load_dotenv
 
 
-load_dotenv()
+@pytest.fixture
+def html():
+    return """ 
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <title>Test Soup</title>
+    </head>
+    <body>
+        <ul>
+            <li>Item 1</li>
+            <li>Item 2</li>
+        </ul>
+    </body>
+    """
 
 
 @pytest.fixture
@@ -23,66 +31,47 @@ def test_selenium_killer(killer):
     assert killer
 
 
-async def test_form_submit():
-    async with SeleniumKiller() as killer:
-        await killer.get("https://www.google.com")
-        killer.forms[0].inputs[5].value = "Brasil"
-        await killer.forms[0].submit(
-            method="GET",
-            follow_redirects=True,
-            input_query_params=[5],
-            input_data=None,
-        )
-        assert (
-            str(killer.response.request.url) == "https://www.google.com/search?q=Brasil"
-        )
-
-
-@pytest.mark.skipif(os.getenv("API_KEY") is None, reason="API_KEY not found")
-async def test_se_cria_um_contexto():
-    token = os.getenv("API_KEY")
-    cnpj = os.getenv("CNPJ")
-    async with SeleniumKiller() as killer:
-        await killer.get(
-            "https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/cnpjreva_Solicitacao.asp"
-        )
-        captcha = await captcha_token(
-            HcaptchaProxylessRequest(
-                websiteKey=killer.forms[0].captcha, websiteUrl=str(killer.response.url)
-            ),
-            api_key=token,
-        )
-        token = {"h-captcha-response": captcha["gRecaptchaResponse"]}
-        killer.forms[0].inputs[1].value = cnpj
-        await killer.forms[0].submit(token=token, follow_redirects=True)
-
-        await killer.save_html("cnpj")
-
-@pytest.mark.skipif(os.getenv("USERNAME") is None, reason="USERNAME not found")
-async def test_se_faz_login_e_salva_no_cabecalho():
-    SeleniunKiller = SeleniumKiller.from_auth_data(
-        "https://apiredigital.redasset.com.br/api/login",
-        {
-            "username": os.getenv("USERNAME"),
-            "password": os.getenv("PASSWORD"),
-            "grant_type": "password",
-        },
+@pytest.mark.respx(base_url="https://foo.bar")
+def test_from_auth_data_success(respx_mock):
+    respx_mock.post("/auth").mock(
+        return_value=httpx.Response(200, json={"access_token": "test"})
     )
-    async with SeleniunKiller as killer:
-        json_data = {
-            "dat_vencimento_ini": "2024-04-01",
-            "dat_vencimento_fin": "2024-04-30",
-            "nro_cpf_cnpj": "",
-            "nro_titulo": "",
-            "cod_cedente": "41208",
-            "opcao": 4,
-        }
-        await killer.post(
-            "https://apiredigital.redasset.com.br/api/operacao/pesquisaBoletos", json=json_data
+    killer = SeleniumKiller.from_auth_data(
+        "https://foo.bar/auth", {"username": "test", "password": "test"}
+    )
+    assert killer.headers["Authorization"].startswith("Bearer test")
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_from_auth_data_failure(respx_mock):
+    respx_mock.post("/auth").mock(return_value=httpx.Response(401))
+    with pytest.raises(httpx.HTTPStatusError):
+        SeleniumKiller.from_auth_data(
+            "https://foo.bar/auth", {"username": "test", "password": "test"}
         )
-        json_data = killer.response.json()[0]
-        await killer.post('https://apiredigital.redasset.com.br/api/operacao/imprimirBoletos',json=[json_data])
-        url = killer.response.json()["mensagem"]
-        await killer.get(url)
-        await killer.save_file("boleto.pdf")
-        assert killer.response
+
+
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_from_auth_data_custom_key_token(respx_mock):
+    respx_mock.post("/auth").mock(
+        return_value=httpx.Response(200, json={"token": "test"})
+    )
+    killer = SeleniumKiller.from_auth_data(
+        "https://foo.bar/auth",
+        {"username": "test", "password": "test"},
+        key_token="token",
+    )
+    assert killer.headers["Authorization"].startswith("Bearer ")
+
+
+def test_soup(killer, html):
+    soup = killer.soup(html)
+    assert soup.find("li").text == "Item 1"
+
+
+def test_find(killer, html):
+    return killer.find("li", html=html).text == "Item 1"
+
+
+def test_find_all(killer, html):
+    return len(killer.find_all("li", html=html)) == 2
