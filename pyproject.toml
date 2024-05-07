@@ -20,6 +20,7 @@ loguru = "^0.7.2"
 respx = "^0.21.1"
 coverage = "^7.5.0"
 mypy = "^1.10.0"
+playwright = "^1.43.0"
 
 
 [tool.poetry.group.dev.dependencies]

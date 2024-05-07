@@ -131,3 +131,9 @@ async def test_se_pega_o_form_faz_submit(killer, respx_mock, html, html_google):
     )
     await killer.forms[0].submit()
     assert "Selenium Killer" in killer.response.text
+
+
+async def test_se_renderiza_pagina(killer: SeleniumKiller):
+    await killer.get("https://aguasdorio.com.br/comunicados/")
+    await killer.render(timeout=0, debug=True)
+    await killer.save_html("render")

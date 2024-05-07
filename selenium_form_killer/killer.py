@@ -1,5 +1,6 @@
 import asyncio
-from typing import  Literal,  Optional, Sequence
+from tempfile import NamedTemporaryFile
+from typing import Literal, Optional, Sequence
 from urllib.parse import urlencode
 
 import chardet
@@ -15,6 +16,7 @@ from selenium_form_killer.types.selenium_types import (
     SeleniumKillerABC,
 )
 from selenium_form_killer.util.util import get_base_url, join_url_action
+from playwright.async_api import async_playwright
 
 
 class SeleniumKiller(SeleniumKillerABC):
@@ -188,6 +190,46 @@ class SeleniumKiller(SeleniumKillerABC):
             exclude_forms=exclude_forms,
             **kwargs,
         )
+
+    async def render(self, timeout: int = 5, debug: bool = False) -> str:
+        """Renderiza a pagina que precisa de javascript para funcionar.
+        Quando o modo debug for True o navegador vai desabilitar o headless.
+
+        Keyword Arguments:
+            timeout -- Tempo para aguardar a pagina a renderizar em segundos (default: {5})
+            debug -- Habilita o modo debug (default: {False})
+
+        Returns:
+            self
+        """
+        _timeout = timeout * 1000
+        self.logger.info(f"Renderizando a pagina com timeout: {timeout}")
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True if not debug else False,
+                args=["--disable-web-security"],
+                ignore_default_args=[
+                    "--disable-extensions",
+                    "--disable-default-apps",
+                    "--disable-component-extensions-with-background-pages",
+                ],
+            )
+            context = await browser.new_context(
+                bypass_csp=True,
+                java_script_enabled=True,
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/105.0.5195.100 Mobile/15E148 Safari/604.1",
+            )
+            page = await context.new_page()
+            with NamedTemporaryFile(suffix=".html") as f:
+                f.write(self.response.content)
+                await page.goto(f"file:///{f.name}")
+            await page.wait_for_timeout(_timeout)
+            html = await page.content()
+            await browser.close()
+            self._response = httpx.Response(
+                content=html.encode("utf-8"), status_code=self.status_code, text=html
+            )
+            return self
 
     async def make_request(
         self,
