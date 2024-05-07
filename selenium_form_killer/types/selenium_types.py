@@ -133,7 +133,7 @@ class SeleniumKillerABC(ABC):
     def extract_captcha(self, formulario: BeautifulSoup) -> str | None:
         pass
 
-    def extract_forms(self, html: Optional[str] = None) -> Sequence["Form"]:
+    def extract_forms(self, html: Optional[str] = None) -> Sequence["FormABC"]:
         pass
 
     async def save_html(self, name: str) -> None:

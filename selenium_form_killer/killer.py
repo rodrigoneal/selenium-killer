@@ -1,5 +1,5 @@
 import asyncio
-from typing import Annotated, Literal, Mapping, Optional, Sequence
+from typing import  Literal,  Optional, Sequence
 from urllib.parse import urlencode
 
 import chardet
@@ -9,10 +9,8 @@ from bs4 import BeautifulSoup
 from typing_extensions import override
 
 from selenium_form_killer.forms import Form, FormInput
-from selenium_form_killer.log.logger import get_logger
 from selenium_form_killer.types.generic_types import ActionTypes
 from selenium_form_killer.types.selenium_types import (
-    FormABC,
     FormInputABC,
     SeleniumKillerABC,
 )
