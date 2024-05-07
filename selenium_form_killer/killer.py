@@ -215,11 +215,11 @@ class SeleniumKiller(SeleniumKillerABC):
             page = await context.new_page()
             if os_name == "nt":
                 await page.set_content(
-                    self.response.content.decode("utf-8"),wait_until="networkidle"
+                    self.response.content.decode("utf-8"),wait_until="domcontentloaded"
                 )
             else:
                 await page.set_content(
-                    self.response.content.decode("utf-8"), timeout=_timeout
+                    self.response.content.decode("utf-8")
                 )
             await page.wait_for_timeout(_timeout)
             html = await page.content()
