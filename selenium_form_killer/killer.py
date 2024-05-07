@@ -1,5 +1,4 @@
 import asyncio
-from tempfile import NamedTemporaryFile
 from typing import Literal, Optional, Sequence
 from urllib.parse import urlencode
 
@@ -7,7 +6,7 @@ import chardet
 import httpx
 import requests
 from bs4 import BeautifulSoup
-from typing_extensions import override
+from typing_extensions import override, Self
 
 from selenium_form_killer.forms import Form, FormInput
 from selenium_form_killer.types.generic_types import ActionTypes
@@ -28,50 +27,40 @@ class SeleniumKiller(SeleniumKillerABC):
         cls, url: str, payload: dict, key_token: Optional[str] = None
     ) -> "SeleniumKiller":
         """
-        Makes a post request to the given url with the payload
-        and returns a new instance of SeleniumKiller with
-        the Authorization header set.
+        Faz uma solicitação POST para o URL fornecido com o payload e retorna uma nova instância de SeleniumKiller com o cabeçalho Authorization definido.
 
-        If the key_token is not provided, it defaults to "access_token".
+        Se o key_token não for fornecido, ele será padrão para "access_token".
 
-        :param url: endpoint url
-        :param payload: data to be sent
-        :param key_token: key in the response json that contains the access_token
+        :param url: URL do endpoint
+        :param payload: dados a serem enviados
+        :param key_token: chave no JSON de resposta que contém o access_token
+
         """
         payload_data = urlencode(payload)
         key_token = key_token if key_token else "access_token"
-        with httpx.Client() as client:
+        with httpx.Client() as client:  # Achei melhor não usar o proprio request do objeto para não sujar os cookies e etc.
             response = client.post(url, data=payload_data)
             response.raise_for_status()
-            # Extract the token from the response
             token = response.json()[key_token]
-            # Set the authorization header
             headers = {"Authorization": f"Bearer {token}"}
             return cls(headers=headers, verbose=True)
 
-    def __call__(self, *args, **kwargs):
-        return self.__class__(*args, **kwargs)
-
-    def __soup(self, html: Optional[str] = None) -> BeautifulSoup:
-        html = html or self._response.text
-        soup = BeautifulSoup(html, "html.parser")
-        return soup
-
     def find(self, *args, html: Optional[str] = None, **kwargs) -> BeautifulSoup:
         self.logger.info(f"find element with args: {args}, kwargs: {kwargs}")
-        soup = self.__soup(html)
+        soup = self.soup(html)
         return soup.find(*args, **kwargs)
 
     def find_all(
         self, *args, html: Optional[str] = None, **kwargs
     ) -> list[BeautifulSoup]:
         self.logger.info(f"find elements with args: {args}, kwargs: {kwargs}")
-        soup = self.__soup(html)
+        soup = self.soup(html)
         return soup.find_all(*args, **kwargs)
 
-    def soup(self, html: Optional[str] = None):
+    def soup(self, html: Optional[str] = None) -> BeautifulSoup:
         html_text = html or self._response.text
-        return self.__soup(html_text)
+        soup = BeautifulSoup(html_text, "html.parser")
+        return soup
 
     async def __aenter__(self):
         self.logger.info("Entering async context")
@@ -124,7 +113,7 @@ class SeleniumKiller(SeleniumKillerABC):
         params: Optional[dict] = dict(),
         use_referer: bool = True,
         **kwargs,
-    ) -> requests.Response:
+    ) -> Self:
         self.logger.info(
             f"Making get request with url: {url}, headers:{headers}, cookies:{cookies}, params: {params}, use_referer: {use_referer}, kwargs: {kwargs}"
         )
@@ -142,11 +131,10 @@ class SeleniumKiller(SeleniumKillerABC):
 
     def _prepare_form_to_request(
         self, form: "Form", fields_delete: Optional[list["FormInput"]]
-    ) -> None:
+    ) -> dict[str, str]:
         self.logger.info(
             f"Preparing form to request with form: {form}, fields_delete: {fields_delete}",
         )
-        breakpoint()
         data = {"data": {}}
         data["method"] = form.method.upper()
         if form.url_base:
@@ -173,7 +161,7 @@ class SeleniumKiller(SeleniumKillerABC):
         form: Optional["Form"] = None,
         exclude_forms: Optional[list["FormInput"]] = None,
         **kwargs,
-    ):
+    ) -> Self:
         self.logger.info(f"Making post request with url: {url} e kwargs: {kwargs}")
 
         return await self.make_request(
@@ -191,7 +179,7 @@ class SeleniumKiller(SeleniumKillerABC):
             **kwargs,
         )
 
-    async def render(self, timeout: int = 5, debug: bool = False) -> str:
+    async def render(self, timeout: int = 5, debug: bool = False) -> Self:
         """Renderiza a pagina que precisa de javascript para funcionar.
         Quando o modo debug for True o navegador vai desabilitar o headless.
 
@@ -220,9 +208,9 @@ class SeleniumKiller(SeleniumKillerABC):
                 user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/105.0.5195.100 Mobile/15E148 Safari/604.1",
             )
             page = await context.new_page()
-            with NamedTemporaryFile(suffix=".html") as f:
-                f.write(self.response.content)
-                await page.goto(f"file:///{f.name}")
+            await page.set_content(
+                self.response.content.decode("utf-8"), timeout=_timeout
+            )
             await page.wait_for_timeout(_timeout)
             html = await page.content()
             await browser.close()
@@ -245,7 +233,7 @@ class SeleniumKiller(SeleniumKillerABC):
         form: Optional["Form"] = False,
         exclude_forms: Optional[list["FormInput"]] = None,
         **httpx_options: dict[str, str],
-    ) -> requests.Response:
+    ) -> Self:
         if use_referer and self.response:
             self.logger.info(f"Using referer:{str(self.response.url)}")
             self.response.headers["Referer"] = str(self.response.url)
