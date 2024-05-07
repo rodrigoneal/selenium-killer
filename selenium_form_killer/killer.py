@@ -1,6 +1,8 @@
 import asyncio
+import os
 from typing import Literal, Optional, Sequence
 from urllib.parse import urlencode
+import warnings
 
 import chardet
 import httpx
@@ -192,6 +194,8 @@ class SeleniumKiller(SeleniumKillerABC):
         """
         _timeout = timeout * 1000
         self.logger.info(f"Renderizando a pagina com timeout: {timeout}")
+        if os.name == "nt":
+            warnings.warn("A renderização no windows está muito lenta")
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True if not debug else False,

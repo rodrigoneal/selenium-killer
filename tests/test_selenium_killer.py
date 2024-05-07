@@ -136,5 +136,5 @@ async def test_se_pega_o_form_faz_submit(killer, respx_mock, html, html_google):
 async def test_se_renderiza_pagina(killer: SeleniumKiller):
     await killer.get("https://aguasdorio.com.br/comunicados/")
     h5 = killer.find_all("h5")
-    await killer.render(timeout=0, debug=False)
+    await killer.render(timeout=0, debug=True)
     assert len(killer.find_all("h5")) > len(h5)
