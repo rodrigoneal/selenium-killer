@@ -194,7 +194,8 @@ class SeleniumKiller(SeleniumKillerABC):
         """
         _timeout = timeout * 1000
         self.logger.info(f"Renderizando a pagina com timeout: {timeout}")
-        if os.name == "nt":
+        os_name = os.name
+        if os_name == "nt":
             warnings.warn("A renderização no windows está muito lenta")
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -212,9 +213,14 @@ class SeleniumKiller(SeleniumKillerABC):
                 user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/105.0.5195.100 Mobile/15E148 Safari/604.1",
             )
             page = await context.new_page()
-            await page.set_content(
-                self.response.content.decode("utf-8"), timeout=_timeout
-            )
+            if os_name == "nt":
+                await page.set_content(
+                    self.response.content.decode("utf-8"),wait_until="networkidle"
+                )
+            else:
+                await page.set_content(
+                    self.response.content.decode("utf-8"), timeout=_timeout
+                )
             await page.wait_for_timeout(_timeout)
             html = await page.content()
             await browser.close()
