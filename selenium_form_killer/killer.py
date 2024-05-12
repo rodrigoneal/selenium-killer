@@ -1,8 +1,10 @@
 import asyncio
 import os
+from tempfile import NamedTemporaryFile, TemporaryFile
 from typing import Literal, Optional, Sequence
 from urllib.parse import urlencode
 import warnings
+import webbrowser
 
 import chardet
 import httpx
@@ -78,6 +80,13 @@ class SeleniumKiller(SeleniumKillerABC):
         await self.session.aclose()
         self.logger.info("Session closed")
 
+    async def close(self):
+        """
+        Fecha a sessão do httpx.
+        """
+        self.logger.info("Session closed")
+        await self.session.aclose()
+
     @property
     def forms(self) -> list["Form"]:
         return self._forms
@@ -93,10 +102,7 @@ class SeleniumKiller(SeleniumKillerABC):
         )
         return await self.session.request(**kwargs)
 
-    async def send_request(
-        self, method: Literal["GET", "POST"], url: str, **kwargs
-    ) -> requests.Response:
-        response = await self._requests(method=method, url=url, **kwargs)
+    async def __handle_response(self, response: requests.Response) -> None:
         encoding = chardet.detect(response.content)["encoding"]
         response.encoding = encoding
         self.headers = response.headers
@@ -106,6 +112,12 @@ class SeleniumKiller(SeleniumKillerABC):
         self.forms = self.extract_forms()
         self.url_base = get_base_url(str(response.url))
         return self
+
+    async def send_request(
+        self, method: Literal["GET", "POST"], url: str, **kwargs
+    ) -> requests.Response:
+        response = await self._requests(method=method, url=url, **kwargs)
+        return await self.__handle_response(response)
 
     async def get(
         self,
@@ -215,12 +227,48 @@ class SeleniumKiller(SeleniumKillerABC):
             page = await context.new_page()
             if os_name == "nt":
                 await page.set_content(
-                    self.response.content.decode("utf-8"),wait_until="domcontentloaded"
+                    self.response.content.decode("utf-8"), wait_until="domcontentloaded"
                 )
             else:
+                await page.set_content(self.response.content.decode("utf-8"))
+            await page.wait_for_timeout(_timeout)
+            html = await page.content()
+            await browser.close()
+            self._response = httpx.Response(
+                content=html.encode("utf-8"), status_code=self.status_code, text=html
+            )
+            return self
+
+    async def click_by_browser(
+        self, element_click: str, timeout: int = 5, debug: bool = False
+    ) -> Self:
+        _timeout = timeout * 1000
+        self.logger.info(f"Renderizando a pagina com timeout: {timeout}")
+        os_name = os.name
+        if os_name == "nt":
+            warnings.warn("A renderização no windows está muito lenta")
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True if not debug else False,
+                args=["--disable-web-security"],
+                ignore_default_args=[
+                    "--disable-extensions",
+                    "--disable-default-apps",
+                    "--disable-component-extensions-with-background-pages",
+                ],
+            )
+            context = await browser.new_context(
+                bypass_csp=True,
+                java_script_enabled=True,
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/105.0.5195.100 Mobile/15E148 Safari/604.1",
+            )
+            page = await context.new_page()
+            if os_name == "nt":
                 await page.set_content(
-                    self.response.content.decode("utf-8")
+                    self.response.content.decode("utf-8"), wait_until="domcontentloaded"
                 )
+            else:
+                await page.set_content(self.response.content.decode("utf-8"))
             await page.wait_for_timeout(_timeout)
             html = await page.content()
             await browser.close()
@@ -271,6 +319,19 @@ class SeleniumKiller(SeleniumKillerABC):
             **httpx_options,
         )
         return self
+
+    def open_response_in_browser(self) -> bool:
+        """
+        Abre a resposta da requisição no browser.
+        Isso é muito util quando está automatizando um formulario para saber se os dados foram preenchidos corretamente.
+
+        Returns:
+            bool: Retorna True se o browser foi aberto com sucesso.
+        """
+        with NamedTemporaryFile(suffix=".html", delete=False) as f:
+            self.logger.info(f"Abrindo a resposta em um browser em: {f.name}")
+            f.write(self.response.content)
+            return webbrowser.open(f.name, 2, False)
 
     def extract_inputs(self, formulario: BeautifulSoup) -> list[FormInputABC]:
         inputs = formulario.find_all(["input", "textarea"])

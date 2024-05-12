@@ -1,3 +1,4 @@
+from pathlib import Path
 import httpx
 import pytest
 
@@ -37,9 +38,11 @@ def html_google():
 
 
 @pytest.fixture
-def killer():
+async def killer():
     killer = SeleniumKiller()
     yield killer
+    await killer.close()
+    Path("killer.log").unlink()
 
 
 def test_selenium_killer(killer):
@@ -132,9 +135,14 @@ async def test_se_pega_o_form_faz_submit(killer, respx_mock, html, html_google):
     await killer.forms[0].submit()
     assert "Selenium Killer" in killer.response.text
 
-
+@pytest.mark.xfail(reason="Needs a browser")
 async def test_se_renderiza_pagina(killer: SeleniumKiller):
     await killer.get("https://aguasdorio.com.br/comunicados/")
     h5 = killer.find_all("h5")
-    await killer.render(timeout=0, debug=True)
+    await killer.render(timeout=0, debug=False)
     assert len(killer.find_all("h5")) > len(h5)
+
+@pytest.mark.xfail(reason="Needs a browser")
+async def test_se_abre_o_response_no_browser(killer: SeleniumKiller):
+    await killer.get("https://aguasdorio.com.br/comunicados/")
+    assert killer.open_response_in_browser()
