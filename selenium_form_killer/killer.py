@@ -1,7 +1,7 @@
 import asyncio
 import os
-from tempfile import NamedTemporaryFile, TemporaryFile
-from typing import Literal, Optional, Sequence
+from tempfile import NamedTemporaryFile
+from typing import Any, Literal, Optional, Sequence
 from urllib.parse import urlencode
 import warnings
 import webbrowser
@@ -23,8 +23,13 @@ from playwright.async_api import async_playwright
 
 
 class SeleniumKiller(SeleniumKillerABC):
-    def __init__(self, headers: dict[str, str] = {}, verbose: bool = False) -> None:
-        super().__init__(headers=headers, verbose=verbose)
+    def __init__(
+        self,
+        headers: dict[str, str] = {},
+        verbose: bool = False,
+        **client_options: dict[str, Any],
+    ) -> None:
+        super().__init__(headers=headers, verbose=verbose, **client_options)
 
     @classmethod
     def from_auth_data(
@@ -223,7 +228,19 @@ class SeleniumKiller(SeleniumKillerABC):
                 bypass_csp=True,
                 java_script_enabled=True,
                 user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/105.0.5195.100 Mobile/15E148 Safari/604.1",
+                accept_downloads=True,
             )
+            for cookie in self.cookies.jar._cookies:
+                cookies = tuple(self.cookies.jar._cookies[cookie].values())
+                values = tuple(cookies[0].values())[0]
+                cookie = dict(
+                    name=values.name,
+                    value=values.value,
+                    domain=values.domain,
+                    path=values.path,
+                    expires=values.expires or -1,
+                )
+                await context.add_cookies([cookie])
             page = await context.new_page()
             if os_name == "nt":
                 await page.set_content(
@@ -280,7 +297,7 @@ class SeleniumKiller(SeleniumKillerABC):
     async def make_request(
         self,
         method: Literal["GET", "POST"],
-        url: Optional[str] = None,
+        url: str = None,
         headers: Optional[dict[str, str]] = {},
         cookies: Optional[dict[str, str]] = {},
         data: Optional[dict[str, str]] = {},
@@ -379,7 +396,7 @@ class SeleniumKiller(SeleniumKillerABC):
         return None
 
     @override
-    def extract_forms(self, html: Optional[str] = None) -> Sequence["Form"]:
+    def extract_forms(self, html: Optional[str] = None) -> list["Form"]:
         self.logger.info("Extracting forms")
         forms = []
         for formulario in self.find_all("form", html=html):

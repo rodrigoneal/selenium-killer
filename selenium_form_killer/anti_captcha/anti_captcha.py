@@ -26,7 +26,7 @@ class AntiCaptcha:
         math: bool = False,
         min_length: int = 0,
         max_length: int = 0,
-    ) -> dict:
+    ) -> httpx.Response:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",

@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 from typing_extensions import Literal, Self
 from bs4 import BeautifulSoup
 import httpx
@@ -9,7 +9,12 @@ from selenium_form_killer.types.generic_types import ActionTypes
 
 
 class SeleniumKillerABC(ABC):
-    def __init__(self, headers: dict[str, str] = {}, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        headers: dict[str, str] = {},
+        verbose: bool = False,
+        **client_options: dict[str, Any],
+    ) -> None:
         self.url_base: Optional[str] = None
         self.headers: Optional[dict[str, str]] = headers or {}
         self.data: Optional[str] = None
@@ -19,6 +24,7 @@ class SeleniumKillerABC(ABC):
         self.status_code: Optional[int] = None
         self.session = httpx.AsyncClient(
             headers=headers,
+            **client_options,
         )
         self.logger = get_logger(verbose)
 
@@ -75,6 +81,7 @@ class SeleniumKillerABC(ABC):
     ) -> Self:
         pass
 
+    
     async def get(
         self,
         url: str,
@@ -86,11 +93,13 @@ class SeleniumKillerABC(ABC):
     ) -> Self:
         pass
 
+    
     def _prepare_form_to_request(
         self, form: "FormABC", fields_delete: Optional[list["FormInputABC"]]
     ) -> dict:
         pass
 
+    
     def post(
         self,
         url: Optional[str] = None,
@@ -106,7 +115,8 @@ class SeleniumKillerABC(ABC):
         **kwargs,
     ) -> Self:
         pass
-
+    
+    
     async def make_request(
         self,
         method: Literal["GET", "POST"],
@@ -124,26 +134,38 @@ class SeleniumKillerABC(ABC):
     ) -> httpx.Response:
         pass
 
+    
     def extract_inputs(self, formulario: BeautifulSoup) -> list["FormInputABC"]:
         pass
 
+    
     def extract_actions(self, formulario: BeautifulSoup) -> ActionTypes:
         pass
 
+    
     def extract_captcha(self, formulario: BeautifulSoup) -> str | None:
         pass
 
+     
     def extract_forms(self, html: Optional[str] = None) -> Sequence["FormABC"]:
         pass
 
+    
+    def extract_form(self, html: Optional[str] = None) -> "FormABC":
+        pass
+
+     
     async def save_html(self, name: str) -> None:
         pass
 
+    
     def _save_file(self, path: str) -> None:
         pass
 
+    
     async def save_file(self, path: str) -> None:
         pass
+
 
     @property
     def response(self) -> httpx.Response:
