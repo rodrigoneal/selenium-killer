@@ -82,6 +82,15 @@ async def test_from_auth_data_custom_key_token(respx_mock):
     assert killer.headers["Authorization"].startswith("Bearer ")
 
 
+@pytest.mark.respx(base_url="https://foo.bar")
+async def test_se_traz_o_request_da_requisicao(killer, respx_mock, html):
+    respx_mock.post("/zoo").mock(return_value=httpx.Response(200, html=html))
+    await killer.post("https://foo.bar/zoo")
+    assert killer.response.status_code == 200
+    assert killer.request.url == "https://foo.bar/zoo"
+
+
+
 def test_soup(killer, html):
     soup = killer.soup(html)
     assert soup.find("li").text == "Item 1"

@@ -19,14 +19,19 @@ class SeleniumKillerABC(ABC):
         self.headers: Optional[dict[str, str]] = headers or {}
         self.data: Optional[str] = None
         self.cookies: Optional[str] = None
-        self._response: httpx.Response = None
+        self._response: Optional[httpx.Response] = None
         self._forms: list[FormABC]
         self.status_code: Optional[int] = None
+        self.request: Optional[httpx.Request] = None
         self.session = httpx.AsyncClient(
             headers=headers,
+            event_hooks={"request": [self._log_request]},
             **client_options,
         )
         self.logger = get_logger(verbose)
+    
+    async def _log_request(self, request: httpx.Request):
+        self.request = request
 
     @classmethod
     def from_auth_data(

@@ -1,7 +1,7 @@
 import asyncio
 import os
 from tempfile import NamedTemporaryFile
-from typing import Any, Literal, Optional, Sequence
+from typing import Any, Literal, Optional
 from urllib.parse import urlencode
 import warnings
 import webbrowser
@@ -431,7 +431,7 @@ class SeleniumKiller(SeleniumKillerABC):
         await asyncio.to_thread(self._save_file, path)
 
     @property
-    def response(self) -> httpx.Response:
+    def response(self) -> httpx.Response | None:
         return self._response
 
     @response.setter
