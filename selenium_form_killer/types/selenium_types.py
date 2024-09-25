@@ -13,6 +13,7 @@ class SeleniumKillerABC(ABC):
         self,
         headers: dict[str, str] = {},
         verbose: bool = False,
+        proxies: dict[str, str] = {},
         **client_options: dict[str, Any],
     ) -> None:
         self.url_base: Optional[str] = None
@@ -26,6 +27,7 @@ class SeleniumKillerABC(ABC):
         self.session = httpx.AsyncClient(
             headers=headers,
             event_hooks={"request": [self._log_request]},
+            proxies=proxies,
             **client_options,
         )
         self.logger = get_logger(verbose)

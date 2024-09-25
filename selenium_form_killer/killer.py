@@ -27,9 +27,10 @@ class SeleniumKiller(SeleniumKillerABC):
         self,
         headers: dict[str, str] = {},
         verbose: bool = False,
+        proxies: dict[str, str] = {},
         **client_options: dict[str, Any],
     ) -> None:
-        super().__init__(headers=headers, verbose=verbose, **client_options)
+        super().__init__(headers=headers, verbose=verbose, proxies=proxies, **client_options)
 
     @classmethod
     def from_auth_data(
