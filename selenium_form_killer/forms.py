@@ -110,6 +110,8 @@ class Form(FormABC):
                 self.inputs = [self.inputs[indice] for indice in input_data]
             elif isinstance(input_data[0], FormInput):
                 self.inputs = input_data
+        elif isinstance(input_data, dict):
+            self.inputs = [FormInput(name=k, value=v) for k, v in input_data.items()]
         elif not input_data:
             self.inputs = []
         kwargs["data"] = {input.name: input.value for input in self.inputs}
